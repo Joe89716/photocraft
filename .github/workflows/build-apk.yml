@@ -29,16 +29,17 @@ jobs:
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli
 
-      # تمكين دعم التوليد العشوائي للويب (js flag) وتجاوز فحص التحذيرات
+      # إجبار تفعيل ميزة js في مكتبة uuid لبناء الـ wasm
       - name: Build Web / WASM Bundle
         env:
           RUSTFLAGS: "-A warnings --cfg getrandom_backend=\"wasm_js\""
         run: |
-          cargo build --release --target wasm32-unknown-unknown -p photocraft --features "uuid/js"
+          cargo add uuid --features "js" -p photocraft || true
+          cargo build --release --target wasm32-unknown-unknown -p photocraft
           mkdir -p www
           wasm-bindgen --target web --out-dir www target/wasm32-unknown-unknown/release/photocraft.wasm
           
-          # إنشاء صفحة index.html جاهزة للتشغيل في حال عدم وجودها
+          # إنشاء ملف index.html
           cat << 'EOF' > www/index.html
           <!DOCTYPE html>
           <html>
