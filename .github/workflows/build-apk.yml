@@ -29,15 +29,43 @@ jobs:
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli
 
-      # بناء حزمة الواجهة الرسومية واستهداف wasm مباشرة بدون فحص التحذيرات
+      # تمكين دعم التوليد العشوائي للويب (js flag) وتجاوز فحص التحذيرات
       - name: Build Web / WASM Bundle
         env:
-          RUSTFLAGS: "-A warnings"
+          RUSTFLAGS: "-A warnings --cfg getrandom_backend=\"wasm_js\""
         run: |
-          cargo build --release --target wasm32-unknown-unknown -p photocraft
+          cargo build --release --target wasm32-unknown-unknown -p photocraft --features "uuid/js"
           mkdir -p www
           wasm-bindgen --target web --out-dir www target/wasm32-unknown-unknown/release/photocraft.wasm
-          if [ -f apps/photocraft/index.html ]; then cp apps/photocraft/index.html www/; elif [ -f index.html ]; then cp index.html www/; fi
+          
+          # إنشاء صفحة index.html جاهزة للتشغيل في حال عدم وجودها
+          cat << 'EOF' > www/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+              <title>PhotoCraft</title>
+              <style>
+                  html, body, canvas {
+                      margin: 0px;
+                      padding: 0px;
+                      width: 100%;
+                      height: 100%;
+                      overflow: hidden;
+                      background-color: #1e1e1e;
+                  }
+              </style>
+          </head>
+          <body>
+              <canvas id="the_canvas_id"></canvas>
+              <script type="module">
+                  import init from './photocraft.js';
+                  init();
+              </script>
+          </body>
+          </html>
+          EOF
 
       - name: Setup Capacitor
         run: |
