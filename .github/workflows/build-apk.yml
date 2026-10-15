@@ -1,0 +1,53 @@
+name: Build PhotoCraft APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Rust & WASM
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+
+      - name: Install Trunk & xtask
+        run: cargo install --locked trunk
+
+      - name: Build Web Bundle (Offline Assets)
+        run: |
+          cargo build --release -p photocraft-web --target wasm32-unknown-unknown || trunk build --release
+
+      - name: Setup Capacitor (Android Wrapper)
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "PhotoCraft" "com.craft.photocraft" --web-dir "dist"
+          npx cap add android
+
+      - name: Build Android Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK File
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhotoCraft-Offline-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
