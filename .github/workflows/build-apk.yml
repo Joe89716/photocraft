@@ -29,7 +29,6 @@ jobs:
       - name: Install Trunk
         run: cargo install --locked trunk
 
-      # بناء تطبيق الويب الرسمي وتفريغه في مجلد www
       - name: Build Web Bundle
         env:
           RUSTFLAGS: "-A warnings"
@@ -53,6 +52,30 @@ jobs:
           npx cap init "PhotoCraft" "com.craft.photocraft" --web-dir "www"
           npx cap add android
           npx cap sync android
+
+      # حل تعارض مكتبات Kotlin Duplicate Classes نهائياً
+      - name: Fix Kotlin Duplicate Classes
+        run: |
+          cat << 'EOF' >> android/app/build.gradle
+
+          configurations.all {
+              resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+                  if (details.requested.group == 'org.jetbrains.kotlin') {
+                      details.useVersion '1.8.22'
+                  }
+              }
+          }
+          dependencies {
+              constraints {
+                  implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22") {
+                      because("align with kotlin-stdlib")
+                  }
+                  implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22") {
+                      because("align with kotlin-stdlib")
+                  }
+              }
+          }
+          EOF
 
       - name: Build Android Debug APK
         run: |
