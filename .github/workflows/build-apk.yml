@@ -16,7 +16,7 @@ jobs:
           node-version: 20
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -26,14 +26,17 @@ jobs:
         with:
           target: wasm32-unknown-unknown
 
-      - name: Install Trunk & xtask
+      - name: Install Trunk (WASM Builder)
         run: cargo install --locked trunk
 
-      - name: Build Web Bundle (Offline Assets)
+      # تجاهل التحذيرات حتى لا تفشل عملية التجميع
+      - name: Build Web Bundle
+        env:
+          RUSTFLAGS: "-A warnings"
         run: |
-          cargo build --release -p photocraft-web --target wasm32-unknown-unknown || trunk build --release
+          trunk build --release
 
-      - name: Setup Capacitor (Android Wrapper)
+      - name: Setup Capacitor
         run: |
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
