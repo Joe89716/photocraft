@@ -26,47 +26,20 @@ jobs:
         with:
           target: wasm32-unknown-unknown
 
-      - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli
+      - name: Install Trunk
+        run: cargo install --locked trunk
 
-      # إجبار تفعيل ميزة js في مكتبة uuid لبناء الـ wasm
-      - name: Build Web / WASM Bundle
+      # بناء تطبيق الويب الرسمي لـ PhotoCraft
+      - name: Build Web Bundle
         env:
-          RUSTFLAGS: "-A warnings --cfg getrandom_backend=\"wasm_js\""
+          RUSTFLAGS: "-A warnings"
         run: |
-          cargo add uuid --features "js" -p photocraft || true
-          cargo build --release --target wasm32-unknown-unknown -p photocraft
+          cd apps/photocraft-web
+          trunk build --release
+          cd ../..
+          # تجهيز مجلد www لملف الـ APK
           mkdir -p www
-          wasm-bindgen --target web --out-dir www target/wasm32-unknown-unknown/release/photocraft.wasm
-          
-          # إنشاء ملف index.html
-          cat << 'EOF' > www/index.html
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-              <title>PhotoCraft</title>
-              <style>
-                  html, body, canvas {
-                      margin: 0px;
-                      padding: 0px;
-                      width: 100%;
-                      height: 100%;
-                      overflow: hidden;
-                      background-color: #1e1e1e;
-                  }
-              </style>
-          </head>
-          <body>
-              <canvas id="the_canvas_id"></canvas>
-              <script type="module">
-                  import init from './photocraft.js';
-                  init();
-              </script>
-          </body>
-          </html>
-          EOF
+          cp -r dist/* www/ || cp -r apps/photocraft-web/dist/* www/
 
       - name: Setup Capacitor
         run: |
