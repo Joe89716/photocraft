@@ -26,21 +26,21 @@ jobs:
         with:
           target: wasm32-unknown-unknown
 
-      - name: Install Trunk (WASM Builder)
-        run: cargo install --locked trunk
-
-      # تجاهل التحذيرات حتى لا تفشل عملية التجميع
+      # استخدام أمر البناء الرسمي للمشروع مع تعطيل إيقاف البناء عند التحذيرات
       - name: Build Web Bundle
         env:
           RUSTFLAGS: "-A warnings"
         run: |
-          trunk build --release
+          cargo xtask web --release
 
       - name: Setup Capacitor
         run: |
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init "PhotoCraft" "com.craft.photocraft" --web-dir "dist"
+          # نحدد مجلد المخرجات الذي ينتجه xtask (غالباً dist أو target/web)
+          TARGET_DIR="dist"
+          if [ -d "target/web" ]; then TARGET_DIR="target/web"; fi
+          npx cap init "PhotoCraft" "com.craft.photocraft" --web-dir "$TARGET_DIR"
           npx cap add android
 
       - name: Build Android Debug APK
