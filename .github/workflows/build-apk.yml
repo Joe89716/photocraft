@@ -1,0 +1,134 @@
+name: Build PhotoCraft APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Setup Rust & WASM
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+
+      - name: Install Trunk & Image Tools
+        run: |
+          cargo install --locked trunk
+          sudo apt-get update && sudo apt-get install -y imagemagick
+
+      # 1. بناء تطبيق الويب الرسمي لـ PhotoCraft
+      - name: Build Web Bundle
+        env:
+          RUSTFLAGS: "-A warnings"
+        run: |
+          cd apps/photocraft-web
+          trunk build --release
+          cd "$GITHUB_WORKSPACE"
+          mkdir -p www
+          if [ -d "dist/web" ]; then
+            cp -r dist/web/* www/
+          elif [ -d "apps/photocraft-web/dist" ]; then
+            cp -r apps/photocraft-web/dist/* www/
+          else
+            cp -r dist/* www/
+          fi
+
+      # 2. إعداد Capacitor للأندرويد
+      - name: Setup Capacitor
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "PhotoCraft" "com.craft.photocraft" --web-dir "www"
+          npx cap add android
+          npx cap sync android
+
+      # 3. استخراج وتثبيت أيقونة PhotoCraft الأصلية وحذف الأيقونة الافتراضية
+      - name: Enforce PhotoCraft Official Icon
+        run: |
+          ICON_SRC=""
+          if [ -f "packaging/photocraft.png" ]; then
+            ICON_SRC="packaging/photocraft.png"
+          elif [ -f "assets/icon.png" ]; then
+            ICON_SRC="assets/icon.png"
+          elif [ -f "docs/brand/artcraft-logo.svg" ]; then
+            convert -background none -resize 512x512 docs/brand/artcraft-logo.svg icon.png
+            ICON_SRC="icon.png"
+          fi
+
+          if [ -n "$ICON_SRC" ]; then
+            RES_DIR="android/app/src/main/res"
+
+            # حذف ملفات أيقونة Capacitor الافتراضية نهائياً
+            rm -rf "$RES_DIR"/mipmap-anydpi-v26
+            rm -f "$RES_DIR"/drawable/ic_launcher_background.xml
+            rm -f "$RES_DIR"/drawable-v24/ic_launcher_foreground.xml
+
+            # توليد الأيقونة الأصلية لكل كثافات الشاشة
+            for entry in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+              folder="${entry%%:*}"
+              size="${entry##*:}"
+              mkdir -p "$RES_DIR/mipmap-$folder"
+              convert "$ICON_SRC" -resize "${size}x${size}" "$RES_DIR/mipmap-$folder/ic_launcher.png"
+              convert "$ICON_SRC" -resize "${size}x${size}" "$RES_DIR/mipmap-$folder/ic_launcher_round.png"
+              convert "$ICON_SRC" -resize "${size}x${size}" "$RES_DIR/mipmap-$folder/ic_launcher_foreground.png"
+            done
+          fi
+
+      # 4. تثبيت الاسم الرسمي للتطبيق في أندرويد
+      - name: Enforce App Name
+        run: |
+          sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">PhotoCraft<\/string>/g' android/app/src/main/res/values/strings.xml
+          sed -i 's/<string name="title_activity_main">.*<\/string>/<string name="title_activity_main">PhotoCraft<\/string>/g' android/app/src/main/res/values/strings.xml
+
+      # 5. معالجة تعارض كوتلن نهائياً
+      - name: Fix Kotlin Duplicate Classes
+        run: |
+          cat << 'EOF' >> android/app/build.gradle
+
+          configurations.all {
+              resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+                  if (details.requested.group == 'org.jetbrains.kotlin') {
+                      details.useVersion '1.8.22'
+                  }
+              }
+          }
+          dependencies {
+              constraints {
+                  implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22") {
+                      because("align with kotlin-stdlib")
+                  }
+                  implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22") {
+                      because("align with kotlin-stdlib")
+                  }
+              }
+          }
+          EOF
+
+      # 6. بناء الـ APK النهائي
+      - name: Build Android Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      # 7. رفع ملف الـ APK للتحميل
+      - name: Upload APK File
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhotoCraft-Offline-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
