@@ -1,0 +1,48 @@
+name: Build iOS/iPadOS App (PhotoCraft)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-14  # استخدام أحدث سيرفر ماك على جيت هب لضمان توافقية أدوات أبل
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install System Dependencies & Briefcase
+        run: |
+          python -m pip install --upgrade pip
+          pip install briefcase
+
+      - name: Configure App & Create iOS Project
+        run: |
+          # لو ملف الإعدادات مش موجود، Briefcase بيعمله تهيئة
+          if [ ! -f "pyproject.toml" ]; then
+            briefcase new --no-input \
+              --project-name="PhotoCraft" \
+              --bundle="com.craft" \
+              --app-name="photocraft" \
+              --gui="kivy"
+          fi
+          
+          # إنشاء مشروع الـ iOS وسحب الحزم والاعتماديات
+          briefcase create ios
+          briefcase update ios
+
+      - name: Build iOS App via Xcode (Offline Package)
+        run: |
+          # بناء التطبيق سحابياً على الماك أونلاين
+          briefcase build ios
+
+      - name: Upload iOS App Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhotoCraft-iPadOS-App
+          path: macos/ios/iphonesimulator/*.app # أو مسار مخرجات البناء حسب التوزيعة
